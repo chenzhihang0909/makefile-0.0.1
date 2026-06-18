@@ -1,0 +1,65 @@
+# 强制关闭编译器测试
+set(CMAKE_C_COMPILER_WORKS ON CACHE BOOL "" FORCE)
+set(CMAKE_C_COMPILER_FORCED ON)
+set(CMAKE_ASM_COMPILER_FORCED ON)
+
+# 你的 RISC-V Clang 编译器
+set(CMAKE_C_COMPILER /home/chenzhihang/workspace/democcc/output/llvm/bin/clang)
+set(CMAKE_ASM_COMPILER /home/chenzhihang/workspace/democcc/output/llvm/bin/clang)
+
+cmake_minimum_required(VERSION 3.10)
+project(democccC C ASM)
+enable_language(ASM)
+
+# 编译参数（⚠️ 去掉了 -nostdlib）
+add_compile_options(
+    -march=rv32ima_zicsr_zifencei_zfinx_zicond_zba_zbb_zbc_zbs_zca_zcb_zcmp_zcmt_smrnmi_xwingza_xinstend
+    -mabi=ilp32
+    -mlittle-endian
+    -O0
+    -fno-builtin
+    -fno-inline-functions
+    -g
+    -DPREALLOCATE=1
+    -std=gnu99
+    -static
+    -mstrict-align
+    -mrelax
+    -mcmodel=medlow
+    -Wno-incompatible-pointer-types
+    -ffreestanding
+)
+
+# 头文件路径
+include_directories(
+    /home/chenzhihang/workspace/democcc/output/llvm/include
+    /home/chenzhihang/workspace/democccC
+    /home/chenzhihang/workspace/democccC/Application
+    /home/chenzhihang/workspace/democccC/Common
+    /home/chenzhihang/workspace/democccC/WMSIS/Core/Include
+    /home/chenzhihang/workspace/democccC/WMSIS/Driver/Include
+    /home/chenzhihang/workspace/democccC/Device/Wingsemi/WM32AES128C100/Include
+)
+
+# 链接脚本目录
+set(LD_DIR /home/chenzhihang/workspace/democccC/Device/Wingsemi/WM32AES128C100/Source/GCC)
+
+# 链接参数（⚠️ 关键：只保留最纯净的裸机链接，不开 nostdlib）
+add_link_options(
+    -static
+    -nostartfiles           # 只不用系统启动文件，保留标准库
+    -L ${LD_DIR}
+    -T ${LD_DIR}/tcm.ld
+    -Wl,--no-warn-mismatch
+    -Wl,--gc-sections
+)
+
+# 自动包含所有源文件
+file(GLOB_RECURSE SOURCES
+    ${PROJECT_SOURCE_DIR}/Application/*.c
+    ${PROJECT_SOURCE_DIR}/Device/Wingsemi/WM32AES128C100/Source/*.c
+    ${PROJECT_SOURCE_DIR}/Device/Wingsemi/WM32AES128C100/Source/GCC/*.S
+    ${PROJECT_SOURCE_DIR}/WMSIS/Driver/Source/*.c
+)
+
+add_executable(main ${SOURCES})

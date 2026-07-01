@@ -348,7 +348,7 @@ function generateMainMakefileContent(
 
     if (targetArgs.flag) {
         let list: string[] = []
-        targetArgs.args?.split(',').map((item) => {
+        targetArgs.args?.split(' ').map((item) => {
             list.push(item)
         })
         cflags = list
@@ -375,7 +375,19 @@ function generateMainMakefileContent(
 
     // 7. Concatenate sub .mk include statements
     let includeSubMk = '';
+    // 拆分出Application路径，剩余其他路径
+    let appPath = '';
+    const otherPaths:any = [];
     subMkPaths.forEach(subMk => {
+        if (subMk.includes('Application/subdir.mk')) {
+            appPath = subMk;
+        } else {
+            otherPaths.push(subMk);
+        }
+    });
+    // 先拼接Application，再拼接其余目录
+    includeSubMk += `include ${appPath}\n`;
+    otherPaths.forEach((subMk:any) => {
         includeSubMk += `include ${subMk}\n`;
     });
 
@@ -418,8 +430,6 @@ ${includeSubMk}
 # Compilation flags CFLAGS (dynamically generated from setting.json)
 CFLAGS = \\
     ${cflags.join(' \\\n    ')} \\
-    -MMD \\
-    -MP
 
 INCLUDES = \\
     ${includePaths.join(' \\\n    ')}

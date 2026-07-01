@@ -22,8 +22,26 @@
       {
         "command": "c-mk-auto-generator.removeMk",
         "title": "Remove mk"
+      },
+      {
+        "command": "c-sort-objs.panelView",
+        "title": "Link Order"
       }
-    ]
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "c-mk-auto-generator.generateMk",
+          "when": "explorerResourceIsFolder",
+          "group": "mk-group@1"
+        },
+        {
+          "command": "c-sort-objs.panelView",
+          "when": "explorerResourceIsFolder",
+          "group": "mk-group@1"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "yarn run package",

@@ -136,6 +136,9 @@ export async function handleBatchGenerateMk(selectedFolderUri: string, targetArg
         });
 
         let successCount = 0;
+        let OBJS:any = {
+            OBJS:[]
+        }
         for (const [cFileDir, cFiles] of dirToCFilesMap) {
             const dirRelToSelected = path.relative(selectedFolderAbsPath, cFileDir).replace(/\\/g, '/');
             const targetMkDir = path.join(outputRoot, dirRelToSelected);
@@ -144,14 +147,20 @@ export async function handleBatchGenerateMk(selectedFolderUri: string, targetArg
             // Ensure directory exists (overwrite if generated before)
             await fs.mkdir(targetMkDir, { recursive: true });
             // Generate sub .mk file (only include non-excluded files)
-            const mkContent = generateSubMkContent(cFiles, workspaceRoot, cFileDir,selectedFolderName);
+            const {mkContent,objs} = generateSubMkContent(cFiles, workspaceRoot, cFileDir,selectedFolderName);
+            
+            if(objs.length>0){
+                OBJS.OBJS = [...OBJS.OBJS, ...objs]
+            }
+            
             await fs.writeFile(mkFilePath, mkContent, 'utf8');
 
             const subMkRelPath = path.relative(outputRoot, mkFilePath).replace(/\\/g, '/');
             subMkPaths.push(subMkRelPath);
             successCount++;
         }
-
+        console.log(OBJS)
+        await fs.writeFile(path.join(outputRoot,'OBJS.json'), JSON.stringify(OBJS,null, 4), 'utf8');
         // 5. Dynamically generate main Makefile based on setting.json + exclusion list
         const mainMakefilePath = path.join(outputRoot, 'makefile');
         const mainMakefileContent = generateMainMakefileContent(
@@ -222,7 +231,7 @@ function generateSubMkContent(
     workspaceRoot: string,
     cFileDir: string,
     selectedFolderName: string
-): string {
+): {mkContent:string, objs:any[]} {
     // 拆分 C 文件 和 S 文件
     const cFiles: string[] = [];
     const sFiles: string[] = [];
@@ -243,6 +252,7 @@ function generateSubMkContent(
 ################################################################################
 
 `;
+let objs:any = []
 
     // ------------------------------
     // 生成 C_SRCS
@@ -297,6 +307,7 @@ OBJS += \\\n`;
             parts.shift();
             const cleanPath = parts.join('/');
             const finalPath = `${workspaceRoot}/${selectedFolderName}/output/` + cleanPath.replace(/\.[cS]$/i, '.o');
+            objs.push(finalPath)
             const lineEnd = index === allObjFiles.length - 1 ? '\n\n' : ' \\\n';
             mkContent += `\t${finalPath}${lineEnd}`;
         });
@@ -321,7 +332,7 @@ C_DEPS += \\\n`;
         });
     }
 
-    return mkContent;
+    return {mkContent, objs:objs};
 }
 
 /**

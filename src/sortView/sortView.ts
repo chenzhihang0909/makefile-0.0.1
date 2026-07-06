@@ -23,24 +23,37 @@ export async function SortViewHtml(selectedFolder: string, sorttableurl:any): Pr
     <title>Link Order Sort</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: system-ui; }
-        body { height: 100vh; display: flex; color: var(--vscode-foreground); background: var(--vscode-editor-background); }
+        body { height: 100vh; display: flex; flex-direction: column; color: var(--vscode-foreground); background: var(--vscode-editor-background); padding: 12px; gap: 16px; }
 
-        /* Left JSON Readonly Panel */
-        .left-panel {
-            width: 45%;
-            border-right: 1px solid var(--vscode-sideBar-border);
+        /* 通用面板容器样式，强化区分感 */
+        .panel {
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 6px;
             padding: 12px;
             display: flex;
             flex-direction: column;
         }
+        /* 上方只读JSON面板 占40%高度 */
+        .top-panel {
+            flex: 0 0 40%;
+            background: var(--vscode-sideBar-background);
+        }
+        /* 下方拖拽排序列表面板 占剩余高度 */
+        .bottom-panel {
+            flex: 1;
+            background: var(--vscode-editorWidget-background);
+        }
+
         .panel-title {
-            font-size: 14px; font-weight: 600; margin-bottom: 10px;
+            font-size: 15px; font-weight: 600; margin-bottom: 10px;
             color: var(--vscode-textLink-foreground);
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--vscode-sideBar-border);
         }
         #json-preview {
             flex: 1;
             padding: 10px;
-            border: 1px solid var(--vscode-input-border);
+            border: 1px solid var(--vscode-sideBar-border);
             border-radius: 4px;
             overflow: auto;
             white-space: pre-wrap;
@@ -51,25 +64,19 @@ export async function SortViewHtml(selectedFolder: string, sorttableurl:any): Pr
             color: var(--vscode-input-foreground);
         }
 
-        /* Right Sortable List Panel */
-        .right-panel {
-            flex: 1;
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-        }
+        /* Right Sortable List */
         .sort-wrap {
             flex: 1;
             overflow: auto;
-            border: 1px solid var(--vscode-input-border);
+            border: 1px solid var(--vscode-sideBar-border);
             border-radius: 4px;
+            background: var(--vscode-list-background);
         }
-        /* Sortable list style */
         #sort-list {
             list-style: none;
         }
         #sort-list li {
-            padding: 8px 10px;
+            padding: 10px 12px;
             border-bottom: 1px solid var(--vscode-sideBar-border);
             font-size: 12px;
             word-break: break-all;
@@ -82,7 +89,7 @@ export async function SortViewHtml(selectedFolder: string, sorttableurl:any): Pr
             background: var(--vscode-list-hoverBackground);
         }
         .empty-tip {
-            padding: 20px;
+            padding: 30px;
             text-align: center;
             color: var(--vscode-descriptionForeground);
         }
@@ -90,14 +97,14 @@ export async function SortViewHtml(selectedFolder: string, sorttableurl:any): Pr
     <script src="${sorttableurl}"></script>
 </head>
 <body>
-    <!-- Left readonly JSON preview -->
-    <div class="left-panel">
+    <!-- 上方：只读JSON预览 -->
+    <div class="panel top-panel">
         <div class="panel-title">Current OBJS.json (Read Only)</div>
         <div id="json-preview"></div>
     </div>
 
-    <!-- Right draggable sort list (ul list, native support for Sortable) -->
-    <div class="right-panel">
+    <!-- 下方：拖拽调整链接顺序 -->
+    <div class="panel bottom-panel">
         <div class="panel-title">Drag to adjust link order (Auto save after dragging)</div>
         <div class="sort-wrap">
             <ul id="sort-list"></ul>

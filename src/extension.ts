@@ -19,7 +19,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(generateMkCommand);
     const sortObjs = vscode.commands.registerCommand(
         'c-sort-objs.panelView',
-        async (selectedFolder: string)=>{
+        async (selectedFolder: any)=>{
             // console.log('命令 c-sort-objs.panelView 被触发');
            const panel = vscode.window.createWebviewPanel(
                 'c-sort-objs.view',   

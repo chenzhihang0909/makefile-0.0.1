@@ -20,17 +20,7 @@ export function activate(context: vscode.ExtensionContext) {
     const sortObjs = vscode.commands.registerCommand(
         'c-sort-objs.panelView',
         async (selectedFolder: any)=>{
-            // console.log('命令 c-sort-objs.panelView 被触发');
-           const panel = vscode.window.createWebviewPanel(
-                'c-sort-objs.view',   
-                'Link Order Sorting', 
-                vscode.ViewColumn.One,
-                {
-                    enableScripts: true,
-                    retainContextWhenHidden: true,
-                }
-            );
-            const Sorttablejs = vscode.Uri.file(path.join(context.extensionPath, 'public', 'Sorttable.js'))
+            console.log('命令 c-sort-objs.panelView 被触发');
             try{
               let fileContent = await fs.readFile(path.join(selectedFolder,'output','OBJS.json'),'utf8')
               let jsonData = JSON.parse(fileContent);
@@ -42,6 +32,17 @@ export function activate(context: vscode.ExtensionContext) {
               vscode.window.showErrorMessage(`Missing OBJS.json file, please reactivate the project.`);
               return
             }
+           const panel = vscode.window.createWebviewPanel(
+                'c-sort-objs.view',   
+                'Link Order Sorting', 
+                vscode.ViewColumn.One,
+                {
+                    enableScripts: true,
+                    retainContextWhenHidden: true,
+                }
+            );
+            const Sorttablejs = vscode.Uri.file(path.join(context.extensionPath, 'public', 'Sorttable.js'))
+            
             panel.webview.html = await SortViewHtml(selectedFolder,panel.webview.asWebviewUri(Sorttablejs))
             panel.onDidDispose(() => {}, null, context.subscriptions);
             panel.webview.onDidReceiveMessage(async (msg) => {

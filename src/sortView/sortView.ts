@@ -23,7 +23,17 @@ export async function SortViewHtml(selectedFolder: string, sorttableurl:any): Pr
     <title>Link Order Sort</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: system-ui; }
-        body { height: 100vh; display: flex; flex-direction: column; color: var(--vscode-foreground); background: var(--vscode-editor-background); padding: 12px; gap: 16px; }
+        html, body { height: 100%; }
+        body {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            color: var(--vscode-foreground);
+            background: var(--vscode-editor-background);
+            padding: 12px;
+            gap: 16px;
+            overflow: hidden; /* 关键：禁止页面整体滚动，溢出只会内部滚动 */
+        }
 
         /* 通用面板容器样式，强化区分感 */
         .panel {
@@ -32,15 +42,14 @@ export async function SortViewHtml(selectedFolder: string, sorttableurl:any): Pr
             padding: 12px;
             display: flex;
             flex-direction: column;
+            flex: 1; /* 上下面板均分高度，各占50% */
+            min-height: 0; /* flex子元素超出压缩修复，必加 */
         }
-        /* 上方只读JSON面板 占40%高度 */
+        /* 上下面板区分背景，不再固定高度占比 */
         .top-panel {
-            flex: 0 0 40%;
             background: var(--vscode-sideBar-background);
         }
-        /* 下方拖拽排序列表面板 占剩余高度 */
         .bottom-panel {
-            flex: 1;
             background: var(--vscode-editorWidget-background);
         }
 
@@ -55,7 +64,7 @@ export async function SortViewHtml(selectedFolder: string, sorttableurl:any): Pr
             padding: 10px;
             border: 1px solid var(--vscode-sideBar-border);
             border-radius: 4px;
-            overflow: auto;
+            overflow: auto; /* 内容溢出内部滚动 */
             white-space: pre-wrap;
             font-family: "Consolas", monospace;
             font-size: 12px;
@@ -67,7 +76,7 @@ export async function SortViewHtml(selectedFolder: string, sorttableurl:any): Pr
         /* Right Sortable List */
         .sort-wrap {
             flex: 1;
-            overflow: auto;
+            overflow: auto; /* 列表溢出内部滚动 */
             border: 1px solid var(--vscode-sideBar-border);
             border-radius: 4px;
             background: var(--vscode-list-background);

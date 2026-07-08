@@ -31,7 +31,17 @@ export function activate(context: vscode.ExtensionContext) {
                 }
             );
             const Sorttablejs = vscode.Uri.file(path.join(context.extensionPath, 'public', 'Sorttable.js'))
-            
+            try{
+              let fileContent = await fs.readFile(path.join(selectedFolder,'output','OBJS.json'),'utf8')
+              let jsonData = JSON.parse(fileContent);
+              if(jsonData && jsonData.OBJS && jsonData.OBJS.length > 32){
+                vscode.window.showErrorMessage(`Link order sorting supports up to 32 files.`);
+                return
+              }
+            }catch(err){
+              vscode.window.showErrorMessage(`Missing OBJS.json file, please reactivate the project.`);
+              return
+            }
             panel.webview.html = await SortViewHtml(selectedFolder,panel.webview.asWebviewUri(Sorttablejs))
             panel.onDidDispose(() => {}, null, context.subscriptions);
             panel.webview.onDidReceiveMessage(async (msg) => {

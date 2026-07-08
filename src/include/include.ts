@@ -3,7 +3,7 @@ import * as fs from 'fs/promises';
 import { glob } from 'glob';
 import * as path from 'path';
 let cflags: string[] = []
-let clink:string[] = []
+let clink: string[] = []
 interface SettingConfig {
     Core: {
         path: string;
@@ -81,7 +81,7 @@ export async function handleBatchGenerateMk(selectedFolderUri: string, targetArg
         const settingJsonPath = path.join(selectedFolderAbsPath, 'config', 'setting.json');
         const projectJsonPath = path.join(selectedFolderAbsPath, 'config', 'project.json');
         let settingConfig: SettingConfig;
-        let projectConfig:any
+        let projectConfig: any
         try {
             const settingJsonContent = await fs.readFile(settingJsonPath, 'utf8');
             const projectConfigContent = await fs.readFile(projectJsonPath, 'utf8');
@@ -91,7 +91,7 @@ export async function handleBatchGenerateMk(selectedFolderUri: string, targetArg
             vscode.window.showErrorMessage(`config/setting.json failed to parse: ${(err as Error).message}`);
             return;
         }
-        if(projectConfig.type === 'RISCAL'){
+        if (projectConfig.type === 'RISCAL') {
             return
         }
         // 2. Parse Include_Exclude array, extract paths to exclude (format: "prefix:exclude path" → take the latter part)
@@ -136,31 +136,46 @@ export async function handleBatchGenerateMk(selectedFolderUri: string, targetArg
         });
 
         let successCount = 0;
-        let OBJS:any = {
-            OBJS:[]
-        }
+        // 收集本次全部合法obj（当前过滤后不被排除的文件对应的obj）
+        let currentValidObjs: string[] = [];
         for (const [cFileDir, cFiles] of dirToCFilesMap) {
             const dirRelToSelected = path.relative(selectedFolderAbsPath, cFileDir).replace(/\\/g, '/');
             const targetMkDir = path.join(outputRoot, dirRelToSelected);
             const mkFilePath = path.join(targetMkDir, 'subdir.mk');
 
-            // Ensure directory exists (overwrite if generated before)
             await fs.mkdir(targetMkDir, { recursive: true });
-            // Generate sub .mk file (only include non-excluded files)
-            const {mkContent,objs} = generateSubMkContent(cFiles, workspaceRoot, cFileDir,selectedFolderName);
-            
-            if(objs.length>0){
-                OBJS.OBJS = [...OBJS.OBJS, ...objs]
-            }
-            
-            await fs.writeFile(mkFilePath, mkContent, 'utf8');
+            const { mkContent, objs } = generateSubMkContent(cFiles, workspaceRoot, cFileDir, selectedFolderName);
 
+            if (objs.length > 0) {
+                currentValidObjs = [...currentValidObjs, ...objs];
+            }
+
+            await fs.writeFile(mkFilePath, mkContent, 'utf8');
             const subMkRelPath = path.relative(outputRoot, mkFilePath).replace(/\\/g, '/');
             subMkPaths.push(subMkRelPath);
             successCount++;
         }
-        console.log(OBJS)
-        await fs.writeFile(path.join(outputRoot,'OBJS.json'), JSON.stringify(OBJS,null, 4), 'utf8');
+
+        // 处理OBJS.json合并逻辑
+        const objsJsonPath = path.join(outputRoot, 'OBJS.json');
+        // 读取历史数据
+        const oldObjs = await readExistObjsJson(objsJsonPath);
+        // 合并新旧列表：剔除被排除项，新增文件内部排序后放末尾
+        const mergedObjs = mergeObjsList(oldObjs, currentValidObjs);
+
+        let finalObjs: string[];
+        // 首次生成无历史记录才全局排序，后续保留原有旧元素顺序
+        if (oldObjs.length === 0) {
+            finalObjs = sortObjsList(mergedObjs);
+        } else {
+            finalObjs = mergedObjs;
+        }
+
+        // 组装写入
+        const OBJS = { OBJS: finalObjs };
+        console.log('Merged OBJS list:', OBJS);
+        await fs.writeFile(objsJsonPath, JSON.stringify(OBJS, null, 4), 'utf8');
+
         // 5. Dynamically generate main Makefile based on setting.json + exclusion list
         const mainMakefilePath = path.join(outputRoot, 'makefile');
         const mainMakefileContent = generateMainMakefileContent(
@@ -177,7 +192,6 @@ export async function handleBatchGenerateMk(selectedFolderUri: string, targetArg
 
     } catch (err) {
         const errorMsg = (err as Error).message;
-        // vscode.window.showErrorMessage(`❌ Error：${errorMsg}`);
         console.error('Generation failed details：', err);
     }
 }
@@ -231,7 +245,7 @@ function generateSubMkContent(
     workspaceRoot: string,
     cFileDir: string,
     selectedFolderName: string
-): {mkContent:string, objs:any[]} {
+): { mkContent: string, objs: any[] } {
     // 拆分 C 文件 和 S 文件
     const cFiles: string[] = [];
     const sFiles: string[] = [];
@@ -252,7 +266,7 @@ function generateSubMkContent(
 ################################################################################
 
 `;
-let objs:any = []
+    let objs: any = []
 
     // ------------------------------
     // 生成 C_SRCS
@@ -332,7 +346,7 @@ C_DEPS += \\\n`;
         });
     }
 
-    return {mkContent, objs:objs};
+    return { mkContent, objs: objs };
 }
 
 /**
@@ -347,7 +361,7 @@ function generateMainMakefileContent(
     subMkPaths: string[],
     selectedFolderName: string,
     excludePaths: string[],
-    targetArgs: { flag: boolean, args?: string,LDFLAGS?:string[] }
+    targetArgs: { flag: boolean, args?: string, LDFLAGS?: string[] }
 ): string {
     // 1. Parse core configuration
     const coreConfig = settingConfig.Core;
@@ -363,14 +377,14 @@ function generateMainMakefileContent(
             list.push(item)
         })
         cflags = list
-        const ldlist:any = targetArgs.LDFLAGS?.map(path => {
+        const ldlist: any = targetArgs.LDFLAGS?.map(path => {
             return path
                 .replace('${workspaceFolder}', workspaceRoot)
                 .replace('$(PROEJECTNAME)', selectedFolderName)
                 .replace('$(VENDOR)', coreConfig.vendor)
                 .replace('$(CORE)', coreConfig.device);
         })
-        clink = ldlist
+        clink = ldlist ?? []
     }
 
     // 5. Concatenate header file paths
@@ -382,23 +396,23 @@ function generateMainMakefileContent(
             .replace('$(VENDOR)', coreConfig.vendor)
             .replace('$(CORE)', coreConfig.device);
     }).map(incPath => `-I${incPath}`);
-    
+
 
     // 7. Concatenate sub .mk include statements
     let includeSubMk = '';
     // 拆分出Application路径，剩余其他路径
     let appPath = '';
-    const otherPaths:any = [];
+    const otherPaths: any = [];
     subMkPaths.forEach(subMk => {
         if (subMk.includes('Application/subdir.mk')) {
             appPath = subMk;
+            includeSubMk += `include ${appPath}\n`;
         } else {
             otherPaths.push(subMk);
         }
     });
-    // 先拼接Application，再拼接其余目录
-    includeSubMk += `include ${appPath}\n`;
-    otherPaths.forEach((subMk:any) => {
+
+    otherPaths.forEach((subMk: any) => {
         includeSubMk += `include ${subMk}\n`;
     });
 
@@ -436,7 +450,9 @@ OUTPUT_DIR = ${workspaceRoot}/${selectedFolderName}/output
 TARGET = ${workspaceRoot}/${selectedFolderName}/output/${targetFileName} # Dynamic target file
 PROJECT_ROOT = ${workspaceRoot}/${selectedFolderName}
 # Include all subdirectory .mk files (excluded files filtered)
-${includeSubMk}
+
+OBJS_JSON := ./OBJS.json
+OBJS := $(shell awk -F'"' '/".*\\.o"/{print $$2}' $(OBJS_JSON) | tr '\\n' ' ')
 
 # Compilation flags CFLAGS (dynamically generated from setting.json)
 CFLAGS = \\
@@ -491,7 +507,7 @@ print:
 \t@echo "Valid C files count: $(words $(C_SRCS))"
 \t@echo "Valid assembly files count: $(words $(S_SRCS))"
 \t@echo "=== Check critical files ==="
-\t@if [ -f "${clink[0].replace('-T', '')}" ]; then \\
+\t@if [ -f "${clink[0]?.replace('-T', '')}" ]; then \\
 \t\techo "✅ Linker script exists"; \\
 \telse \\
 \t\techo "❌ Linker script not found, please check the path!"; \\
@@ -499,4 +515,53 @@ print:
 `;
 
     return makefileContent;
+}
+
+/**
+ * 读取现有OBJS.json，不存在/损坏返回空数组
+ */
+async function readExistObjsJson(jsonPath: string): Promise<string[]> {
+    try {
+        const raw = await fs.readFile(jsonPath, 'utf8');
+        const data = JSON.parse(raw);
+        if (Array.isArray(data?.OBJS)) {
+            return data.OBJS;
+        }
+        return [];
+    } catch {
+        // 文件不存在、解析失败、格式错误全部返回空
+        return [];
+    }
+}
+
+/**
+ * 合并新旧obj列表：
+ * 1. 保留旧列表中仍合法的obj，维持原有顺序
+ * 2. 本次新增文件内部排序后追加到末尾
+ * @param oldObjs 上次保存的obj数组
+ * @param currentValidObjs 本次过滤后合法obj数组
+ * @returns 合并后新数组
+ */
+function mergeObjsList(oldObjs: string[], currentValidObjs: string[]): string[] {
+    // 保留旧数组中仍然合法的obj（剔除本次被排除的文件）
+    const remainOld = oldObjs.filter(item => currentValidObjs.includes(item));
+    // 找出本次全新增加的obj
+    const newAdd = currentValidObjs.filter(item => !remainOld.includes(item));
+    // 新增文件内部按Application优先规则排序
+    const sortedNewItems = sortObjsList(newAdd);
+    // 合并：旧元素顺序不动，新增排序后放末尾
+    return [...remainOld, ...sortedNewItems];
+}
+
+/**
+ * 统一排序规则：Application目录优先，其余按字母升序
+ */
+function sortObjsList(list: string[]): string[] {
+    return list.sort((a, b) => {
+        const aIsApp = a.includes('/Application/');
+        const bIsApp = b.includes('/Application/');
+        if (aIsApp && !bIsApp) return -1;
+        if (!aIsApp && bIsApp) return 1;
+        return a.localeCompare(b);
+    });
 }

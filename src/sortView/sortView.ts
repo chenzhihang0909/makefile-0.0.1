@@ -1,8 +1,8 @@
 import * as path from 'path';
 import * as fs from 'fs/promises';
 
-export async function SortViewHtml(selectedFolder: string, sorttableurl:any): Promise<string> {
-    const OBJSJsonPath = path.join(selectedFolder, 'output', 'OBJS.json');
+export async function SortViewHtml(selectedFolder: string, sorttableurl:any, activeConfigKey:any): Promise<string> {
+    const OBJSJsonPath = path.join(selectedFolder, 'output', activeConfigKey, 'OBJS.json');
     let objsConfig: any = { OBJS: [] };
 
     try {

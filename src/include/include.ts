@@ -116,7 +116,7 @@ export async function handleBatchGenerateMk(selectedFolderUri: string, targetArg
         const activeConfigKey = settingConfig.ActiveConfigure;
         const activeMode = settingConfig.BuildConfig[activeConfigKey];
         if (!activeMode) {
-            vscode.window.showErrorMessage(`未找到激活配置：${activeConfigKey}，BuildConfig内不存在该配置项`);
+            vscode.window.showErrorMessage(`Activation configuration not found: ${activeConfigKey}, this configuration item does not exist in BuildConfig`);
             return;
         }
 

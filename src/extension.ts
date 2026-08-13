@@ -3,8 +3,16 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { handleBatchGenerateMk, removeGenerateMK } from './include/include';
 import { SortViewHtml } from './sortView/sortView'
+import { promisify } from 'util';
+import { exec } from 'child_process';
 let decorationType: vscode.TextEditorDecorationType | undefined;
 const isShowSortLink = 'wing.sortlinkflag'
+let outputChannel: vscode.OutputChannel;
+const execAsync = promisify(exec);
+
+// 服务器目标目录（插件运行在服务器，本地磁盘路径）
+const REMOTE_LOG_DIR = "/wingstudio/user-data-logs";
+
 export function activate(context: vscode.ExtensionContext) {
     vscode.commands.executeCommand('setContext', isShowSortLink, false);
 
@@ -12,7 +20,6 @@ export function activate(context: vscode.ExtensionContext) {
     const generateMkCommand = vscode.commands.registerCommand(
         'c-mk-auto-generator.generateMk',
         async (selectedFolder: string, targetArgs: any) => {
-            // await handleBatchGenerateMk('/home/chenzhihang/workspace/demo_130C', {flag:false});
             await handleBatchGenerateMk(selectedFolder, targetArgs);
         }
     );
@@ -58,9 +65,7 @@ export function activate(context: vscode.ExtensionContext) {
                         const settingConfig = JSON.parse(settingJson);
                         const activeConfigKey = settingConfig.ActiveConfigure;
                         await fs.writeFile(path.join(selectedFolder, 'output', activeConfigKey, 'OBJS.json'), saveData, 'utf8');
-                        // vscode.window.setStatusBarMessage('OBJS.json 顺序已保存', 2000);
                     } catch (e) {
-                        // vscode.window.showErrorMessage(`保存文件失败: ${(e as Error).message}`);
                     }
                 }
             });
@@ -76,12 +81,67 @@ export function activate(context: vscode.ExtensionContext) {
     );
     context.subscriptions.push(removeMkCommand);
 
-    vscode.window.onDidChangeActiveTextEditor(() => {
-        console.log('aaaaaa')
-    });
+    outputChannel = vscode.window.createOutputChannel('Tar Deploy');
+    const packUploadCmd = vscode.commands.registerCommand(
+        'tar-deploy-sftp.packAndUpload',
+        async (folderUri: vscode.Uri) => {
+            try {
+                const folderPath = folderUri.fsPath;
+                console.log(`Trigger pack‑and‑upload command, folder path: ${folderPath}`);
+                const folderName = path.basename(folderPath);
+                const timestamp = Date.now();
+                const tempTarName = `${folderName}-${timestamp}.tar.gz`;
+                const folderParentDir = path.dirname(folderPath);
+                const tempTarPath = path.join(folderParentDir, tempTarName);
 
+                outputChannel.show();
+                outputChannel.appendLine(`Start processing folder: ${folderPath}`);
+
+                // Step1: 打包
+                await packFolderToTar(folderPath, tempTarPath);
+                outputChannel.appendLine(`Packing completed, archive path: ${tempTarPath}`);
+
+                // Step2: 确保目标目录存在
+                // await fs.mkdir(REMOTE_LOG_DIR, { recursive: true });
+                const targetTarPath = path.join(REMOTE_LOG_DIR, tempTarName);
+
+                // Step3: 将tar包移动到服务器目标目录
+                await fs.rename(tempTarPath, targetTarPath);
+                outputChannel.appendLine(`Tar file moved to target dir: ${targetTarPath}`);
+
+                vscode.window.showInformationMessage(`Package success, saved to ${REMOTE_LOG_DIR}/${tempTarName}`);
+
+            } catch (err: any) {
+                outputChannel.appendLine(`Execution failed: ${err.message}`);
+                vscode.window.showErrorMessage(`Pack & upload failed: ${err.message}`);
+            }
+        }
+    );
+
+    context.subscriptions.push(packUploadCmd);
 }
 
 export function deactivate() {
     decorationType?.dispose();
+}
+
+async function packFolderToTar(folderDir: string, outputTar: string) {
+    const folderBase = path.dirname(folderDir);
+    const folderName = path.basename(folderDir);
+    let tarCmd: string;
+
+    if (process.platform === 'win32') {
+        tarCmd = `cd "${folderBase}" && tar -zcvf "${outputTar}" "${folderName}"`;
+    } else {
+        tarCmd = `cd "${folderBase}" && tar -zcvf "${outputTar}" "${folderName}"`;
+    }
+
+    outputChannel.appendLine(`Execute pack command: ${tarCmd}`);
+    await execAsync(tarCmd, { maxBuffer: 1024 * 1024 * 500 });
+
+    try {
+        await fs.access(outputTar);
+    } catch {
+        throw new Error('Failed to generate tar archive');
+    }
 }

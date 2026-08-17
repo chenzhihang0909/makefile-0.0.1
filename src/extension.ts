@@ -85,6 +85,7 @@ export function activate(context: vscode.ExtensionContext) {
     const packUploadCmd = vscode.commands.registerCommand(
         'tar-deploy-sftp.packAndUpload',
         async (folderUri: vscode.Uri) => {
+            let tempTarPath: string | null = null;
             try {
                 const folderPath = folderUri.fsPath;
                 console.log(`Trigger pack‑and‑upload command, folder path: ${folderPath}`);
@@ -92,7 +93,7 @@ export function activate(context: vscode.ExtensionContext) {
                 const timestamp = Date.now();
                 const tempTarName = `${folderName}-${timestamp}.tar.gz`;
                 const folderParentDir = path.dirname(folderPath);
-                const tempTarPath = path.join(folderParentDir, tempTarName);
+                tempTarPath = path.join(folderParentDir, tempTarName);
 
                 outputChannel.show();
                 outputChannel.appendLine(`Start processing folder: ${folderPath}`);
@@ -101,17 +102,26 @@ export function activate(context: vscode.ExtensionContext) {
                 await packFolderToTar(folderPath, tempTarPath);
                 outputChannel.appendLine(`Packing completed, archive path: ${tempTarPath}`);
 
-                // Step2: 确保目标目录存在
-                // await fs.mkdir(REMOTE_LOG_DIR, { recursive: true });
                 const targetTarPath = path.join(REMOTE_LOG_DIR, tempTarName);
 
                 // Step3: 将tar包移动到服务器目标目录
                 await fs.rename(tempTarPath, targetTarPath);
                 outputChannel.appendLine(`Tar file moved to target dir: ${targetTarPath}`);
+                // 移动成功，清空标记，不需要清理
+                tempTarPath = null;
 
                 vscode.window.showInformationMessage(`Package success, saved to ${REMOTE_LOG_DIR}/${tempTarName}`);
 
             } catch (err: any) {
+                // 移动/打包失败：如果临时tar包存在，做清理
+                if (tempTarPath) {
+                    try {
+                        await fs.unlink(tempTarPath);
+                        outputChannel.appendLine(`Cleanup temporary tar: ${tempTarPath}`);
+                    } catch (cleanErr) {
+                        outputChannel.appendLine(`Warning: clean temp tar failed: ${(cleanErr as Error).message}`);
+                    }
+                }
                 outputChannel.appendLine(`Execution failed: ${err.message}`);
                 vscode.window.showErrorMessage(`Pack & upload failed: ${err.message}`);
             }

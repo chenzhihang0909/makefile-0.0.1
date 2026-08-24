@@ -4,6 +4,7 @@ import { glob } from 'glob';
 import * as path from 'path';
 let cflags: string[] = []
 let clink: string[] = []
+let aflags: string[] = []
 interface SettingConfig {
     Core: {
         path: string;
@@ -68,7 +69,7 @@ interface SettingConfig {
     Include_Exclude: string[]
 }
 
-export async function handleBatchGenerateMk(selectedFolderUri: string, targetArgs: { flag: boolean, args?: string }) {
+export async function handleBatchGenerateMk(selectedFolderUri: string, targetArgs: { flag: boolean, args?: string, AFLAGS?: string}) {
     try {
         console.log('Selected folder URI:', selectedFolderUri);
         const selectedFolderAbsPath = selectedFolderUri;
@@ -361,12 +362,12 @@ function generateMainMakefileContent(
     subMkPaths: string[],
     selectedFolderName: string,
     excludePaths: string[],
-    targetArgs: { flag: boolean, args?: string, LDFLAGS?: string[] }
+    targetArgs: { flag: boolean, args?: string,AFLAGS?:string, LDFLAGS?: string[] }
 ): string {
     // 1. Parse core configuration
     const coreConfig = settingConfig.Core;
     const compilerConfig = settingConfig.Compiler;
-
+    const assemblerConfig = settingConfig.Assembler;
 
     // 3. Concatenate compilation flags
 
@@ -377,6 +378,12 @@ function generateMainMakefileContent(
             list.push(item)
         })
         cflags = list
+
+        let alist : string[] = [];
+        targetArgs.AFLAGS?.split(' ').map((item) => {
+            alist.push(item)
+        })
+        aflags = alist
         const ldlist: any = targetArgs.LDFLAGS?.map(path => {
             return path
                 .replace('${workspaceFolder}', workspaceRoot)
@@ -397,6 +404,14 @@ function generateMainMakefileContent(
             .replace('$(CORE)', coreConfig.device);
     }).map(incPath => `-I${incPath}`);
 
+    const aincludePaths = assemblerConfig.incudePath.map(path => {
+        return path
+            .replace('$(TOOLCHAINS)/llvm/include', `${coreConfig.path}/llvm/include`)
+            .replace('${workspaceFolder}', workspaceRoot)
+            .replace('$(PROEJECTNAME)', selectedFolderName)
+            .replace('$(VENDOR)', coreConfig.vendor)
+            .replace('$(CORE)', coreConfig.device);
+    }).map(incPath => `-I${incPath}`);
 
     // 7. Concatenate sub .mk include statements
     let includeSubMk = '';
@@ -458,16 +473,21 @@ OBJS := $(shell awk -F'"' '/".*\\.o"/{print $$2}' $(OBJS_JSON) | tr '\\n' ' ')
 CFLAGS = \\
     ${cflags.join(' \\\n    ')} \\
 
+# Compilation flags AFLAGS (dynamically generated from setting.json)
+AFLAGS = \\
+    ${aflags.join(' \\\n    ')} \\
+
 INCLUDES = \\
     ${includePaths.join(' \\\n    ')}
-
+AINCLUDES = \\
+    ${aincludePaths.join(' \\\n    ')}
 $(OUTPUT_DIR)/%.o: $(PROJECT_ROOT)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 $(OUTPUT_DIR)/%.o: $(PROJECT_ROOT)/%.S
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+	$(CC) $(AFLAGS) $(AINCLUDES) -c $< -o $@
 
 -include $(C_DEPS)
 

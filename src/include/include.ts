@@ -4,7 +4,7 @@ import { glob } from 'glob';
 import * as path from 'path';
 let cflags: string[] = []
 let clink: string[] = []
-
+let aflags: string[] = []
 // 单个构建模式：Debug / Release 内部结构
 interface BuildModeItem {
     Include_Exclude: string[];
@@ -85,7 +85,7 @@ interface SettingConfig {
     SVD: any;
 }
 
-export async function handleBatchGenerateMk(selectedFolderUri: string, targetArgs: { flag: boolean, args?: string, LDFLAGS?: string[] }) {
+export async function handleBatchGenerateMk(selectedFolderUri: string, targetArgs: { flag: boolean, args?: string, LDFLAGS?: string[], AFLAGS?: string}) {
     try {
         console.log('Selected folder URI:', selectedFolderUri);
         const selectedFolderAbsPath = selectedFolderUri;
@@ -211,8 +211,7 @@ export async function handleBatchGenerateMk(selectedFolderUri: string, targetArg
             selectedFolderName,
             excludePaths,
             targetArgs,
-            activeConfigKey,
-            modeOutputRoot
+            activeConfigKey
         );
         await fs.writeFile(mainMakefilePath, mainMakefileContent, 'utf8');
 
@@ -384,20 +383,25 @@ function generateMainMakefileContent(
     subMkPaths: string[],
     selectedFolderName: string,
     excludePaths: string[],
-    targetArgs: { flag: boolean, args?: string, LDFLAGS?: string[] },
+    targetArgs: { flag: boolean, args?: string, AFLAGS?:string, LDFLAGS?: string[] },
     activeConfigKey: string,
-    modeOutputRoot: string
+    // modeOutputRoot: string
 ): string {
     const coreConfig = settingConfig.Core;
     const compilerConfig = activeMode.Compiler;
-    const linkerConfig = activeMode.Linker;
-
+    // const linkerConfig = activeMode.Linker;
+    const assemblerConfig = activeMode.Assembler;
     if (targetArgs.flag) {
         let list: string[] = []
         targetArgs.args?.split(' ').filter(Boolean).forEach((item) => {
             list.push(item)
         })
         cflags = list
+        let alist : string[] = [];
+        targetArgs.AFLAGS?.split(' ').map((item) => {
+            alist.push(item)
+        })
+        aflags = alist
         const ldlist: string[] = targetArgs.LDFLAGS?.map(path => {
             return path
                 .replace('${workspaceFolder}', workspaceRoot)
@@ -418,6 +422,14 @@ function generateMainMakefileContent(
             .replace('$(CORE)', coreConfig.device);
     }).map(incPath => `-I${incPath}`);
 
+    const aincludePaths = assemblerConfig.incudePath.map(path => {
+        return path
+            .replace('$(TOOLCHAINS)/llvm/include', `${coreConfig.path}/llvm/include`)
+            .replace('${workspaceFolder}', workspaceRoot)
+            .replace('$(PROEJECTNAME)', selectedFolderName)
+            .replace('$(VENDOR)', coreConfig.vendor)
+            .replace('$(CORE)', coreConfig.device);
+    }).map(incPath => `-I${incPath}`);
     // 拼接subdir.mk引入（相对当前makefile目录）
     let includeSubMk = '';
     let appPath = '';
@@ -478,8 +490,15 @@ OBJS := $(shell awk -F'"' '/".*\\.o"/{print $$2}' $(OBJS_JSON) | tr '\\n' ' ')
 CFLAGS = \\
     ${cflags.join(' \\\n    ')} \\
 
+# Compilation flags AFLAGS (dynamically generated from setting.json)
+AFLAGS = \\
+    ${aflags.join(' \\\n    ')} \\
+
 INCLUDES = \\
     ${includePaths.join(' \\\n    ')}
+
+AINCLUDES = \\
+    ${aincludePaths.join(' \\\n    ')}
 
 # 编译输出到当前模式目录
 $(OUTPUT_DIR)/%.o: $(PROJECT_ROOT)/%.c
@@ -488,7 +507,7 @@ $(OUTPUT_DIR)/%.o: $(PROJECT_ROOT)/%.c
 
 $(OUTPUT_DIR)/%.o: $(PROJECT_ROOT)/%.S
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+	$(CC) $(AFLAGS) $(AINCLUDES) -c $< -o $@
 
 -include $(C_DEPS)
 

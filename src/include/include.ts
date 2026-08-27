@@ -476,13 +476,13 @@ function generateMainMakefileContent(
 # Basic configuration
 CC = ${coreConfig.path}/llvm/bin/clang
 WORKSPACE = ${workspaceRoot}
-# 当前模式专属输出目录
+
 OUTPUT_DIR = ${workspaceRoot}/${selectedFolderName}/output/${activeConfigKey}
-# 最终目标文件存放在当前模式目录
+
 TARGET = ${fullTargetPath}
 PROJECT_ROOT = ${workspaceRoot}/${selectedFolderName}
 
-# OBJS.json 和 makefile 同级，直接读取
+
 OBJS_JSON := ./OBJS.json
 OBJS := $(shell awk -F'"' '/".*\\.o"/{print $$2}' $(OBJS_JSON) | tr '\\n' ' ')
 
@@ -500,7 +500,7 @@ INCLUDES = \\
 AINCLUDES = \\
     ${aincludePaths.join(' \\\n    ')}
 
-# 编译输出到当前模式目录
+
 $(OUTPUT_DIR)/%.o: $(PROJECT_ROOT)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@

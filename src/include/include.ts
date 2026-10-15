@@ -85,6 +85,11 @@ interface SettingConfig {
     SVD: any;
 }
 
+interface ProjectConfig {
+    type?: string;
+    artifactType?: string;
+}
+
 export async function handleBatchGenerateMk(selectedFolderUri: string, targetArgs: { flag: boolean, args?: string, LDFLAGS?: string[], AFLAGS?: string}) {
     try {
         console.log('Selected folder URI:', selectedFolderUri);
@@ -98,7 +103,7 @@ export async function handleBatchGenerateMk(selectedFolderUri: string, targetArg
         const settingJsonPath = path.join(selectedFolderAbsPath, 'config', 'setting.json');
         const projectJsonPath = path.join(selectedFolderAbsPath, 'config', 'project.json');
         let settingConfig: SettingConfig;
-        let projectConfig: any
+        let projectConfig: ProjectConfig
         try {
             const settingJsonContent = await fs.readFile(settingJsonPath, 'utf8');
             const projectConfigContent = await fs.readFile(projectJsonPath, 'utf8');
@@ -211,7 +216,8 @@ export async function handleBatchGenerateMk(selectedFolderUri: string, targetArg
             selectedFolderName,
             excludePaths,
             targetArgs,
-            activeConfigKey
+            activeConfigKey,
+            projectConfig
         );
         await fs.writeFile(mainMakefilePath, mainMakefileContent, 'utf8');
 
@@ -385,12 +391,13 @@ function generateMainMakefileContent(
     excludePaths: string[],
     targetArgs: { flag: boolean, args?: string, AFLAGS?:string, LDFLAGS?: string[] },
     activeConfigKey: string,
-    // modeOutputRoot: string
+    projectConfig: ProjectConfig
 ): string {
     const coreConfig = settingConfig.Core;
     const compilerConfig = activeMode.Compiler;
     // const linkerConfig = activeMode.Linker;
     const assemblerConfig = activeMode.Assembler;
+    const isStaticLibrary = projectConfig.artifactType?.toLowerCase() === 'lib';
     if (targetArgs.flag) {
         let list: string[] = []
         targetArgs.args?.split(' ').filter(Boolean).forEach((item) => {
@@ -446,8 +453,8 @@ function generateMainMakefileContent(
         includeSubMk += `include ${subMk}\n`;
     });
 
-    const targetFileName = `${selectedFolderName}.riscv`;
-    // 最终elf目标放入当前模式文件夹
+    const targetFileName = isStaticLibrary ? `${selectedFolderName}.a` : `${selectedFolderName}.riscv`;
+    // 最终产物放入当前模式文件夹
     const fullTargetPath = `${workspaceRoot}/${selectedFolderName}/output/${activeConfigKey}/${targetFileName}`;
 
     // asm过滤逻辑不变
@@ -475,6 +482,7 @@ function generateMainMakefileContent(
 
 # Basic configuration
 CC = ${coreConfig.path}/llvm/bin/clang
+AR = ${coreConfig.path}/llvm/bin/llvm-ar
 WORKSPACE = ${workspaceRoot}
 
 OUTPUT_DIR = ${workspaceRoot}/${selectedFolderName}/output/${activeConfigKey}
@@ -521,7 +529,9 @@ all: $(TARGET)
 
 $(TARGET): $(OBJS)
 	@mkdir -p $(OUTPUT_DIR)
-	$(CC) $(OBJS) $(LDFLAGS) -o $@
+${isStaticLibrary
+    ? '\t$(AR) rcs $@ $(OBJS)'
+    : '\t$(CC) $(OBJS) $(LDFLAGS) -o $@'}
 
 .PHONY: removeTarget
 removeTarget:

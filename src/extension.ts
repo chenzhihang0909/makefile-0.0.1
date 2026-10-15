@@ -94,24 +94,34 @@ export function activate(context: vscode.ExtensionContext) {
                 const tempTarName = `${folderName}-${timestamp}.tar.gz`;
                 const folderParentDir = path.dirname(folderPath);
                 tempTarPath = path.join(folderParentDir, tempTarName);
-
                 outputChannel.show();
                 outputChannel.appendLine(`Start processing folder: ${folderPath}`);
-
                 // Step1: 打包
                 await packFolderToTar(folderPath, tempTarPath);
                 outputChannel.appendLine(`Packing completed, archive path: ${tempTarPath}`);
-
                 const targetTarPath = path.join(REMOTE_LOG_DIR, tempTarName);
 
-                // Step3: 将tar包移动到服务器目标目录
-                await fs.rename(tempTarPath, targetTarPath);
+                // ========== 替换原来的 fs.rename，增加跨设备兼容 ==========
+                const moveFile = async (src: string, dest: string) => {
+                    try {
+                        await fs.rename(src, dest);
+                    } catch (err: any) {
+                        if (err.code === 'EXDEV') {
+                            outputChannel.appendLine(`Cross-device detected, use copy + unlink instead`);
+                            await fs.copyFile(src, dest);
+                            await fs.unlink(src);
+                        } else {
+                            throw err;
+                        }
+                    }
+                };
+                await moveFile(tempTarPath, targetTarPath);
+                // =========================================================
+
                 outputChannel.appendLine(`Tar file moved to target dir: ${targetTarPath}`);
                 // 移动成功，清空标记，不需要清理
                 tempTarPath = null;
-
                 vscode.window.showInformationMessage(`Package success, saved to ${REMOTE_LOG_DIR}/${tempTarName}`);
-
             } catch (err: any) {
                 // 移动/打包失败：如果临时tar包存在，做清理
                 if (tempTarPath) {
@@ -127,6 +137,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }
     );
+
 
     context.subscriptions.push(packUploadCmd);
 }
